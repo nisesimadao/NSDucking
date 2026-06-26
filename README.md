@@ -6,30 +6,17 @@ VST3 / AU 対応 · JUCE 8 · macOS / Windows · MIT License
 
 ---
 
-## UI プレビュー
+## スクリーンショット
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  NSDucking                              Main   MIDI   About  │
-├─────────────────┬───────────────────────────────────────────┤
-│                 │  Volume Curve                    Classic   │
-│  SMOOTH         │  1.0 ┤·····╮                              │
-│  ┌────┐         │       │    ╰──────╮                       │
-│  │    │         │  0.5 ┤            ╰──────╮                │
-│  └────┘         │       │                  ╰────────        │
-│                 │  0.0 ┤──────────────────────────────      │
-│  DEPTH          │      └─────────────────────────────       │
-│  ╔════╗         │       ← Length (1/4 note) →              │
-│  ║    ║         │                                           │
-│  ╚════╝         │  ●  ●    ●        ●          ●     ●     │
-├─────────────────┴───────────────────────────────────────────┤
-│  Classic  Tight   Pump   Soft   Hard   Long   Side   Gate   │
-│                              Length [1/4 ▼]  Output [0dB ◀▶]│
-└─────────────────────────────────────────────────────────────┘
-```
+### Main タブ — カーブエディターとプリセット
 
-> ● はドラッグで動かせるカーブ編集ハンドルです。  
-> 赤い縦線はリアルタイム再生ヘッドです（MIDIトリガー後に流れます）。
+![NSDucking Main](images/screenshot_main.png)
+
+> ドットはドラッグで動かせるカーブ編集ハンドルです。赤い縦線はリアルタイム再生ヘッドです（MIDIトリガー後に流れます）。
+
+### MIDI タブ — トリガー設定
+
+![NSDucking MIDI](images/screenshot_midi.png)
 
 ---
 
@@ -143,6 +130,3 @@ cmake -S . -B build -DNSDUCKING_FETCH_JUCE=OFF -DJUCE_DIR=/path/to/JUCE
 
 MIT License — 詳細は [LICENSE](LICENSE) を参照してください。
 
----
-
-<sub>Created with [Claude Code](https://claude.ai/code)</sub>
