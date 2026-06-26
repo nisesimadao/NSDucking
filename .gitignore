@@ -1,0 +1,11 @@
+build/
+build-*/
+cmake-build-*/
+DerivedData/
+*.xcodeproj/
+*.xcworkspace/
+*.vst3/
+*.component/
+.DS_Store
+*.o
+*.d
