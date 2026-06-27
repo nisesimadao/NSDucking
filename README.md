@@ -18,6 +18,10 @@ VST3 / AU 対応 · JUCE 8 · macOS / Windows · MIT License
 
 ![NSDucking MIDI](images/screenshot_midi.png)
 
+### About タブ
+
+![NSDucking About](images/screenshot_about.png)
+
 ---
 
 ## 特徴

@@ -31,20 +31,18 @@ T* choiceParam (NSDuckingAudioProcessor::APVTS& parameters, const juce::String& 
     return dynamic_cast<T*> (parameters.getParameter (id));
 }
 
-juce::Font labelFont()
-{
-    return juce::Font (juce::FontOptions (12.0f));
-}
+// 細めのゴシック体 — macOS: Helvetica Neue Light / Windows: Segoe UI Light
+#if JUCE_WINDOWS
+constexpr const char* kSansRegular = "Segoe UI";
+constexpr const char* kSansLight   = "Segoe UI Light";
+#else
+constexpr const char* kSansRegular = "Helvetica Neue";
+constexpr const char* kSansLight   = "Helvetica Neue";
+#endif
 
-juce::Font titleFont()
-{
-    return juce::Font (juce::FontOptions (22.0f).withStyle ("Bold"));
-}
-
-juce::Font sectionFont()
-{
-    return juce::Font (juce::FontOptions (11.0f).withStyle ("Bold"));
-}
+juce::Font labelFont()   { return juce::Font (juce::FontOptions{}.withName (kSansLight).withHeight (12.0f).withStyle ("Light")); }
+juce::Font titleFont()   { return juce::Font (juce::FontOptions{}.withName (kSansLight).withHeight (22.0f).withStyle ("Light")); }
+juce::Font sectionFont() { return juce::Font (juce::FontOptions{}.withName (kSansRegular).withHeight (11.0f)); }
 
 float smoothHandleValue (const std::array<float, 6>& handles, float position)
 {
@@ -109,7 +107,7 @@ void drawVolumePath (juce::Graphics& g, juce::Rectangle<float> plot,
 }
 } // namespace
 
-// ── LookAndFeel ─────────────────────────────────────────────────────────────
+// ── LookAndFeel ──────────────────────────────────────────────────────────────
 
 NSDuckingLookAndFeel::NSDuckingLookAndFeel()
 {
@@ -118,18 +116,61 @@ NSDuckingLookAndFeel::NSDuckingLookAndFeel()
     setColour (juce::Slider::rotarySliderOutlineColourId, juce::Colour { 0xff111315u });
     setColour (juce::Slider::trackColourId,               accent);
     setColour (juce::Slider::backgroundColourId,          panelLight);
-    setColour (juce::TextButton::buttonColourId,          panelLight);
-    setColour (juce::TextButton::buttonOnColourId,        accent);
-    setColour (juce::TextButton::textColourOffId,         text);
-    setColour (juce::TextButton::textColourOnId,          juce::Colour { 0xff071014u });
+    setColour (juce::TextButton::textColourOffId,         mutedText);
+    setColour (juce::TextButton::textColourOnId,          text);
     setColour (juce::ComboBox::backgroundColourId,        panelLight);
     setColour (juce::ComboBox::textColourId,              text);
-    setColour (juce::ComboBox::outlineColourId,           juce::Colour { 0xff48505au });
+    setColour (juce::ComboBox::outlineColourId,           juce::Colour { 0xff3d4450u });
     setColour (juce::PopupMenu::backgroundColourId,       panel);
     setColour (juce::PopupMenu::textColourId,             text);
     setColour (juce::ToggleButton::textColourId,          text);
     setColour (juce::ToggleButton::tickColourId,          accent);
     setColour (juce::ToggleButton::tickDisabledColourId,  mutedText);
+}
+
+void NSDuckingLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& button,
+                                                  const juce::Colour&,
+                                                  bool shouldDrawButtonAsHighlighted,
+                                                  bool /*shouldDrawButtonAsDown*/)
+{
+    const auto bounds   = button.getLocalBounds().toFloat();
+    const auto selected = button.getToggleState();
+
+    if (shouldDrawButtonAsHighlighted && ! selected)
+    {
+        g.setColour (juce::Colours::white.withAlpha (0.04f));
+        g.fillRoundedRectangle (bounds.reduced (2.0f, 4.0f), 4.0f);
+    }
+
+    if (selected)
+    {
+        g.setColour (accent);
+        g.fillRoundedRectangle (
+            juce::Rectangle<float> (bounds.getX() + 8.0f, bounds.getBottom() - 3.0f,
+                                    bounds.getWidth() - 16.0f, 2.5f), 1.2f);
+    }
+}
+
+void NSDuckingLookAndFeel::drawComboBox (juce::Graphics& g, int width, int height,
+                                          bool /*isButtonDown*/,
+                                          int /*buttonX*/, int /*buttonY*/,
+                                          int /*buttonW*/, int /*buttonH*/, juce::ComboBox&)
+{
+    const auto bounds = juce::Rectangle<float> (0.0f, 0.0f, (float) width, (float) height);
+    g.setColour (panelLight);
+    g.fillRoundedRectangle (bounds, 4.0f);
+    g.setColour (juce::Colour { 0xff3d4450u });
+    g.drawRoundedRectangle (bounds.reduced (0.5f), 4.0f, 1.0f);
+
+    const float cx = (float) width - 14.0f;
+    const float cy = (float) height * 0.5f;
+    juce::Path chevron;
+    chevron.startNewSubPath (cx - 4.0f, cy - 1.5f);
+    chevron.lineTo (cx,        cy + 2.5f);
+    chevron.lineTo (cx + 4.0f, cy - 1.5f);
+    g.setColour (mutedText);
+    g.strokePath (chevron, juce::PathStrokeType (1.5f, juce::PathStrokeType::mitered,
+                                                  juce::PathStrokeType::rounded));
 }
 
 void NSDuckingLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
@@ -151,17 +192,30 @@ void NSDuckingLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, in
     g.setColour (juce::Colour { 0xff090a0cu });
     g.drawEllipse (bounds, 1.5f);
 
+    // Groove – full range, dimmed
+    juce::Path groove;
+    groove.addCentredArc (centre.x, centre.y, radius - 5.0f, radius - 5.0f, 0.0f,
+                          rotaryStartAngle, rotaryEndAngle, true);
+    g.setColour (juce::Colour { 0xff1b1e22u });
+    g.strokePath (groove, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+    // Active arc
     juce::Path arc;
     arc.addCentredArc (centre.x, centre.y, radius - 5.0f, radius - 5.0f, 0.0f,
                        rotaryStartAngle, angle, true);
     g.setColour (accent);
     g.strokePath (arc, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-    const auto markerLength = radius * 0.55f;
-    const auto markerStart  = centre.getPointOnCircumference (radius * 0.22f, angle);
-    const auto markerEnd    = centre.getPointOnCircumference (markerLength, angle);
-    g.setColour (text);
-    g.drawLine ({ markerStart, markerEnd }, 2.4f);
+    // Pointer line
+    const auto markerStart = centre.getPointOnCircumference (radius * 0.22f, angle);
+    const auto markerEnd   = centre.getPointOnCircumference (radius * 0.60f, angle);
+    g.setColour (text.withAlpha (0.90f));
+    g.drawLine ({ markerStart, markerEnd }, 2.0f);
+
+    // Thumb dot at arc tip
+    const auto thumbPt = centre.getPointOnCircumference (radius - 5.0f, angle);
+    g.setColour (accent.brighter (0.3f));
+    g.fillEllipse (thumbPt.x - 2.5f, thumbPt.y - 2.5f, 5.0f, 5.0f);
 }
 
 void NSDuckingLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height,
@@ -267,7 +321,10 @@ void CurveDisplay::paint (juce::Graphics& g)
 
     g.setFont (labelFont());
     g.setColour (mutedText);
-    g.drawText ("Volume Curve", bounds.toNearestInt().reduced (16, 10), juce::Justification::topLeft);
+    const auto labelArea = bounds.reduced (16.0f, 10.0f);
+    g.drawText ("Curve", juce::Rectangle<int> ((int) labelArea.getX(), (int) labelArea.getY(),
+                                                (int) (labelArea.getWidth() * 0.5f), 18),
+                juce::Justification::centredLeft);
     g.drawText (juce::String (nsducking::getPresetName (preset).data()), bounds.toNearestInt().reduced (16, 10),
                 juce::Justification::topRight);
 
@@ -469,7 +526,7 @@ NSDuckingAudioProcessorEditor::NSDuckingAudioProcessorEditor (NSDuckingAudioProc
     triggerModeCombo.addItemList ({ "MIDI", "Host Sync" }, 1);
     addChildComponent (triggerModeCombo);
 
-    configureHorizontalSlider (velocitySensSlider, velocitySensLabel, "Velocity Sensitivity");
+    configureHorizontalSlider (velocitySensSlider, velocitySensLabel, "Vel. Sensitivity");
 
     retriggerLabel.setText ("Retrigger", juce::dontSendNotification);
     retriggerLabel.setFont (labelFont());
@@ -497,11 +554,6 @@ NSDuckingAudioProcessorEditor::NSDuckingAudioProcessorEditor (NSDuckingAudioProc
     }
     addChildComponent (noteFilterCombo);
 
-    // About page
-    aboutPageLabel.setFont (juce::Font (juce::FontOptions (15.0f)));
-    aboutPageLabel.setColour (juce::Label::textColourId, text);
-    aboutPageLabel.setJustificationType (juce::Justification::centred);
-    addChildComponent (aboutPageLabel);
 
     // Attach parameters
     auto& state = audioProcessor.getState();
@@ -533,23 +585,101 @@ void NSDuckingAudioProcessorEditor::paint (juce::Graphics& g)
 {
     g.fillAll (background);
 
+    // Header bar
     auto bounds = getLocalBounds();
     g.setColour (juce::Colour { 0xff0f1113u });
     g.fillRect (bounds.removeFromTop (48));
 
-    const auto level          = audioProcessor.getMidiActivity();
-    const auto indicatorBounds = midiIndicator.getBounds().toFloat();
-    g.setColour (level > 0.0f ? hotAccent.withAlpha (0.35f + 0.65f * level) : juce::Colour { 0xff343a40u });
-    g.fillEllipse (indicatorBounds);
-    g.setColour (juce::Colour { 0x66000000u });
-    g.drawEllipse (indicatorBounds, 1.0f);
+    // Hairline separator at bottom of header
+    g.setColour (juce::Colour { 0xff000000u });
+    g.drawHorizontalLine (48, 0.0f, (float) getWidth());
+    g.setColour (juce::Colour { 0xff38404au });
+    g.drawHorizontalLine (49, 0.0f, (float) getWidth());
 
+    // MIDI activity LED
+    const auto level           = audioProcessor.getMidiActivity();
+    const auto indicatorBounds = midiIndicator.getBounds().toFloat();
+    const bool active          = level > 0.0f;
+
+    if (active)
+    {
+        g.setColour (hotAccent.withAlpha (0.10f * level));
+        g.fillEllipse (indicatorBounds.expanded (6.0f));
+        g.setColour (hotAccent.withAlpha (0.22f * level));
+        g.fillEllipse (indicatorBounds.expanded (3.0f));
+    }
+
+    const auto ledColour = active ? hotAccent : juce::Colour { 0xff3a3e42u };
+    g.setGradientFill (juce::ColourGradient (
+        ledColour.brighter (active ? 0.35f * level : 0.0f),
+        indicatorBounds.getCentreX(), indicatorBounds.getY(),
+        ledColour.darker (0.2f),
+        indicatorBounds.getCentreX(), indicatorBounds.getBottom(), false));
+    g.fillEllipse (indicatorBounds);
+    g.setColour (juce::Colours::white.withAlpha (0.18f));
+    g.fillEllipse (indicatorBounds.reduced (3.0f).translated (0.0f, -1.0f));
+
+    // Content panel (non-main tabs)
     if (currentTab != 0)
     {
         auto pagePanel = getLocalBounds().reduced (22);
         pagePanel.removeFromTop (54);
         g.setColour (panel);
         g.fillRoundedRectangle (pagePanel.toFloat(), 8.0f);
+    }
+
+    // About page – drawn directly for full typographic control
+    if (currentTab == 2)
+    {
+        auto area = getLocalBounds();
+        area.removeFromTop (54);
+        area.reduce (36, 24);
+
+        g.setFont (titleFont());
+        g.setColour (text);
+        g.drawText ("NSDucking", area.removeFromTop (36), juce::Justification::centred);
+
+        // Version badge
+        const auto badgeW   = 64.0f;
+        const auto badgeH   = 22.0f;
+        const auto badgeRect = juce::Rectangle<float> (
+            (float) getWidth() * 0.5f - badgeW * 0.5f,
+            (float) area.getY() + 1.0f, badgeW, badgeH);
+        g.setColour (accent.withAlpha (0.15f));
+        g.fillRoundedRectangle (badgeRect, 5.0f);
+        g.setColour (accent);
+        g.setFont (sectionFont());
+        g.drawText ("v0.2.0", badgeRect.toNearestInt(), juce::Justification::centred);
+        area.removeFromTop (30);
+
+        // Divider
+        area.removeFromTop (10);
+        g.setColour (panelLight.brighter (0.1f));
+        g.fillRect (juce::Rectangle<float> ((float) getWidth() * 0.35f, (float) area.getY(),
+                                            (float) getWidth() * 0.30f, 1.0f));
+        area.removeFromTop (14);
+
+        // Subtitle + author
+        g.setFont (juce::Font (juce::FontOptions{}.withHeight (14.0f)));
+        g.setColour (mutedText);
+        g.drawText ("MIDI-triggered audio ducking plugin", area.removeFromTop (22), juce::Justification::centred);
+        g.setFont (juce::Font (juce::FontOptions{}.withHeight (13.0f)));
+        g.setColour (text.withAlpha (0.65f));
+        g.drawText ("by nisesimadao", area.removeFromTop (22), juce::Justification::centred);
+        area.removeFromTop (20);
+
+        // Description
+        g.setFont (juce::Font (juce::FontOptions{}.withHeight (12.0f)));
+        g.setColour (mutedText.withAlpha (0.75f));
+        g.drawText ("Trigger ducking envelopes with MIDI Note On  |  Shape curves with draggable handles",
+                    area.removeFromTop (20), juce::Justification::centred, true);
+        area.removeFromTop (28);
+
+        // Footer
+        g.setFont (juce::Font (juce::FontOptions{}.withHeight (11.0f)));
+        g.setColour (mutedText.withAlpha (0.45f));
+        g.drawText ("Built with JUCE 8  |  MIT License  |  github.com/nisesimadao/NSDucking",
+                    area.removeFromTop (18), juce::Justification::centred);
     }
 }
 
@@ -567,9 +697,8 @@ void NSDuckingAudioProcessorEditor::resized()
 
     area.reduce (16, 14);
 
-    const auto showMain  = currentTab == 0;
-    const auto showMidi  = currentTab == 1;
-    const auto showAbout = currentTab == 2;
+    const auto showMain = currentTab == 0;
+    const auto showMidi = currentTab == 1;
 
     // ── Main page layout ─────────────────────────────────────────────────────
     auto bottom   = area.removeFromBottom (112);
@@ -640,13 +769,6 @@ void NSDuckingAudioProcessorEditor::resized()
         noteFilterCombo.setBounds (rightCol.removeFromTop (rowH));
     }
 
-    // ── About page layout ─────────────────────────────────────────────────────
-    {
-        auto aboutArea = getLocalBounds();
-        aboutArea.removeFromTop (54);
-        aboutPageLabel.setBounds (aboutArea.reduced (36, 36));
-    }
-
     // ── Visibility ────────────────────────────────────────────────────────────
     depthSlider.setVisible (showMain);
     smoothSlider.setVisible (showMain);
@@ -670,7 +792,6 @@ void NSDuckingAudioProcessorEditor::resized()
     noteFilterButton.setVisible (showMidi);
     noteFilterCombo.setVisible (showMidi);
 
-    aboutPageLabel.setVisible (showAbout);
 }
 
 void NSDuckingAudioProcessorEditor::configureRotarySlider (juce::Slider& slider, juce::Label& label,
@@ -710,6 +831,8 @@ void NSDuckingAudioProcessorEditor::configureTabButton (juce::TextButton& button
 {
     button.setClickingTogglesState (false);
     button.onClick = [this, tabIndex] { setCurrentTab (tabIndex); };
+    button.setColour (juce::TextButton::textColourOffId, mutedText);
+    button.setColour (juce::TextButton::textColourOnId,  text);
     addAndMakeVisible (button);
 }
 
@@ -723,17 +846,6 @@ void NSDuckingAudioProcessorEditor::setCurrentTab (int tabIndex)
         parameter->setValueNotifyingHost (parameter->convertTo0to1 (static_cast<float> (currentTab)));
         parameter->endChangeGesture();
     }
-
-    // Update About page text (here so it's always fresh)
-    aboutPageLabel.setText (
-        "NSDucking  v0.1.0\n\n"
-        "Free MIDI-triggered ducking plugin\n"
-        "by nisesimadao\n\n"
-        "Trigger your audio ducking envelope with MIDI Note On.\n"
-        "Edit curves by dragging the handles in the Curve Editor.\n\n"
-        "Built with JUCE  --  MIT License\n"
-        "github.com/nisesimadao/NSDucking",
-        juce::dontSendNotification);
 
     updateTabButtons();
     resized();
