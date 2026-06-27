@@ -1,0 +1,113 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── CurveLibrary smoke test (JUCE 不要、数秒で完了) ─────────────────────────
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build & run smoke test
+        run: |
+          clang++ -std=c++17 -ISource Source/CurveLibrary.cpp tests/CurveSmoke.cpp -o /tmp/smoke
+          /tmp/smoke && echo "Smoke test passed"
+
+  # ── プラグインビルド (macOS: VST3+AU / Windows: VST3) ───────────────────────
+  build:
+    needs: smoke
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            name: macOS
+          - os: windows-latest
+            name: Windows
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # JUCE ソース・ビルドをキャッシュ（CMakeLists.txt が変わったら再取得）
+      - name: Cache JUCE
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: juce-${{ matrix.os }}-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: |
+            juce-${{ matrix.os }}-
+
+      # COPY_PLUGIN_AFTER_BUILD が成功するようにインストール先を作成
+      - name: Create plugin install dirs (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/VST3
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+
+      - name: Create plugin install dirs (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "$env:COMMONPROGRAMFILES\VST3"
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3 + AU (macOS)
+        if: runner.os == 'macOS'
+        run: cmake --build build --target NSDucking_VST3 NSDucking_AU --config Release
+
+      - name: Build VST3 (Windows)
+        if: runner.os == 'Windows'
+        run: cmake --build build --target NSDucking_VST3 --config Release
+
+      # ── Package ────────────────────────────────────────────────────────────
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          ARTEFACTS=build/NSDucking_artefacts/Release
+          TAG=${{ github.ref_name }}
+          zip -r "NSDucking-${TAG}-macOS-VST3.zip" "${ARTEFACTS}/VST3/NSDucking.vst3"
+          zip -r "NSDucking-${TAG}-macOS-AU.zip"   "${ARTEFACTS}/AU/NSDucking.component"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $artefacts = "build\NSDucking_artefacts\Release"
+          $tag = "${{ github.ref_name }}"
+          Compress-Archive -Path "$artefacts\VST3\NSDucking.vst3" `
+                           -DestinationPath "NSDucking-${tag}-Windows-VST3.zip"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugins-${{ matrix.name }}
+          path: '*.zip'
+
+  # ── GitHub Release へのアップロード（タグプッシュ時のみ） ─────────────────
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Attach binaries to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: '*.zip'
